@@ -25,18 +25,10 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
     }
     @Override
     public String getStatusForOnBoardUnit(long fz_id) {
-        final String sqlFZ  = "SELECT LOWER(TRIM(STATUS)) AS S FROM FAHRZEUGGERAT WHERE FZ_ID  = ?";
-        final String sqlFZG = "SELECT LOWER(TRIM(STATUS)) AS S FROM FAHRZEUGGERAT WHERE FZG_ID = ?";
-        try (PreparedStatement ps = getConnection().prepareStatement(sqlFZ)) {
+        final String sql = "SELECT LOWER(TRIM(STATUS)) AS S FROM FAHRZEUGGERAT WHERE FZ_ID = ? OR FZG_ID = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
             ps.setLong(1, fz_id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getString("S");
-            }
-        } catch (SQLException e) {
-
-        }
-        try (PreparedStatement ps = getConnection().prepareStatement(sqlFZG)) {
-            ps.setLong(1, fz_id);
+            ps.setLong(2, fz_id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getString("S");
             }
@@ -49,17 +41,16 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
     @Override
     public int getUsernumber(int maut_id) {
         final String sql = """
-        SELECT n.NUTZER_ID AS NNR
+        SELECT f.NUTZER_ID
         FROM   MAUTERHEBUNG   m
         JOIN   FAHRZEUGGERAT  g ON g.FZG_ID = m.FZG_ID
         JOIN   FAHRZEUG       f ON f.FZ_ID  = g.FZ_ID
-        JOIN   NUTZER         n ON n.NUTZER_ID = f.NUTZER_ID
         WHERE  m.MAUT_ID = ?
         """;
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
             ps.setInt(1, maut_id);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt("NNR") : 0;  // Erwartet: 1000002
+                return rs.next() ? rs.getInt("NUTZER_ID") : 0;
             }
         } catch (SQLException e) {
             throw new DataException("getUsernumber failed for MAUT_ID=" + maut_id, e);
@@ -90,19 +81,11 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
     }
     @Override
     public void updateStatusForOnBoardUnit(long fz_id, String status) {
-        final String updFZ  = "UPDATE FAHRZEUGGERAT SET STATUS = ? WHERE FZ_ID  = ?";
-        final String updFZG = "UPDATE FAHRZEUGGERAT SET STATUS = ? WHERE FZG_ID = ?";
-        try (PreparedStatement ps = getConnection().prepareStatement(updFZ)) {
+        final String sql = "UPDATE FAHRZEUGGERAT SET STATUS = ? WHERE FZ_ID = ? OR FZG_ID = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
             ps.setString(1, status);
             ps.setLong(2, fz_id);
-            int n = ps.executeUpdate();
-            if (n > 0) return;
-        } catch (SQLException e) {
-            // versuche FZG_ID
-        }
-        try (PreparedStatement ps = getConnection().prepareStatement(updFZG)) {
-            ps.setString(1, status);
-            ps.setLong(2, fz_id);
+            ps.setLong(3, fz_id);
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new DataException("updateStatusForOnBoardUnit failed for FZ_ID=" + fz_id, e);
@@ -111,7 +94,6 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
     @Override
     public void deleteVehicle(long fz_id) {
         try {
-
             try (PreparedStatement ps = getConnection().prepareStatement(
                     "DELETE FROM POSITION WHERE MAUT_ID IN (SELECT MAUT_ID FROM MAUTERHEBUNG WHERE FZG_ID = ?)")) {
                 ps.setLong(1, fz_id);
@@ -125,13 +107,9 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
             }
 
             try (PreparedStatement ps = getConnection().prepareStatement(
-                    "DELETE FROM FAHRZEUGGERAT WHERE FZ_ID = ?")) {
+                    "DELETE FROM FAHRZEUGGERAT WHERE FZ_ID = ? OR FZG_ID = ?")) {
                 ps.setLong(1, fz_id);
-                ps.executeUpdate();
-            }
-            try (PreparedStatement ps = getConnection().prepareStatement(
-                    "DELETE FROM FAHRZEUGGERAT WHERE FZG_ID = ?")) {
-                ps.setLong(1, fz_id);
+                ps.setLong(2, fz_id);
                 ps.executeUpdate();
             }
 
